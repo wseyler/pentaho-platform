@@ -25,19 +25,27 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.Mockito;
+
+import static org.junit.Assert.assertFalse;
 import static org.mockito.Matchers.any;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.pentaho.platform.api.repository2.unified.IUnifiedRepository;
 import org.pentaho.platform.api.repository2.unified.RepositoryFile;
+import org.pentaho.platform.api.scheduler2.IScheduler;
 import org.pentaho.platform.api.scheduler2.Job;
 import org.pentaho.platform.api.scheduler2.SchedulerException;
 import org.pentaho.platform.engine.core.system.PentahoSystem;
+import org.pentaho.platform.engine.core.system.SystemSettings;
 import org.quartz.CronExpression;
 import org.quartz.CronTrigger;
 import org.quartz.Trigger;
 
-import java.text.ParseException;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
@@ -47,10 +55,8 @@ import static org.junit.Assert.assertNotNull;
 
 public class QuartzSchedulerTest {
 
-
   private static IUnifiedRepository repo;
   private static IUnifiedRepository oldRepo;
-
 
   @BeforeClass
   public static void setUp() throws Exception {
@@ -78,7 +84,14 @@ public class QuartzSchedulerTest {
         return repositoryFile;
       }
     } );
+
     PentahoSystem.registerObject( repo, IUnifiedRepository.class );
+    PentahoSystem.init();
+
+    SystemSettings settings = new SystemSettings();
+    PentahoSystem.setSystemSettingsService( settings );
+
+    Files.createDirectories( Paths.get( "./system/quartz" ) );
   }
 
   @AfterClass
@@ -87,6 +100,10 @@ public class QuartzSchedulerTest {
     if ( oldRepo != null ) {
       PentahoSystem.registerObject( oldRepo, IUnifiedRepository.class );
     }
+    PentahoSystem.shutdown();
+
+    Files.delete( Paths.get( "./system/quartz" ) );
+    Files.delete( Paths.get( "./system" ) );
   }
 
   @Test
@@ -197,4 +214,27 @@ public class QuartzSchedulerTest {
     assertEquals( null,  job.getNextRun() );
   }
 
+  /**
+   * Tests QuartzScheduler's storeSchedulerStatus (called in start() and pause() methods) as well as getStoredSchedulerStatus.
+   *
+   * @throws SchedulerException
+   * @throws IOException
+   */
+  @Test
+  public void testStoreAndGetSchedulerStatus() throws SchedulerException, IOException {
+    QuartzScheduler quartzScheduler = new QuartzScheduler();
+    File schedulerStatusPropertiesFile = quartzScheduler.getSchedulerStatusPropertiesFile();
+
+    schedulerStatusPropertiesFile.delete();
+    assertFalse( schedulerStatusPropertiesFile.exists() );
+    assertEquals( IScheduler.SchedulerStatus.RUNNING, quartzScheduler.getStoredSchedulerStatus() );
+
+    quartzScheduler.start();
+    assertEquals( IScheduler.SchedulerStatus.RUNNING, quartzScheduler.getStoredSchedulerStatus() );
+
+    quartzScheduler.pause();
+    assertEquals( IScheduler.SchedulerStatus.PAUSED, quartzScheduler.getStoredSchedulerStatus() );
+
+    schedulerStatusPropertiesFile.delete();
+  }
 }

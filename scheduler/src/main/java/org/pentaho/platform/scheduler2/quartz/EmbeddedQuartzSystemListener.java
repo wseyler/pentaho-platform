@@ -112,7 +112,13 @@ public class EmbeddedQuartzSystemListener implements IPentahoSystemListener {
         if ( logger.isDebugEnabled() ) {
           logger.debug( scheduler.getQuartzScheduler().getSchedulerName() );
         }
-        scheduler.start();
+
+        // If the scheduler status file exists and contains "RUNNING" status, start the scheduler
+        if ( scheduler.getStoredSchedulerStatus().equals( IScheduler.SchedulerStatus.RUNNING ) ) {
+          scheduler.start();
+        } else {
+          scheduler.pause();
+        }
       }
     } catch ( IOException ex ) {
       result = false;
